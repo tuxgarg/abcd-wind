@@ -35,17 +35,18 @@ app = FastAPI(
 )
 
 # Vercel Serverless Path Rewrite Middleware:
-# When Vercel applies the rewrite rule `{"source": "/api/(.*)", "destination": "/api/index.py"}`,
-# Vercel rewrites the ASGI request path to `/api/index.py` and stores the original URL
-# in the `x-matched-path` or `x-forwarded-uri` header.
-# This middleware restores the true requested path so FastAPI routes it correctly.
+# Intercepts requests rewritten by Vercel to /api/index.py and resolves the true endpoint.
 @app.middleware("http")
 async def vercel_path_rewrite_middleware(request: Request, call_next):
-    path = request.scope.get("path", "")
-    if path in ["/api/index.py", "/api/index", "/api", "/api/index.py/"]:
+    route = request.query_params.get("__vercel_route__")
+    if route:
+        clean_route = route.lstrip("/")
+        target_path = f"/api/{clean_route}"
+        request.scope["path"] = target_path
+        request.scope["raw_path"] = target_path.encode("utf-8")
+    elif request.scope.get("path") in ["/api/index.py", "/api/index", "/api", "/api/index.py/"]:
         matched_path = request.headers.get("x-matched-path") or request.headers.get("x-forwarded-uri")
-        if matched_path:
-            # Strip query parameters from path if present
+        if matched_path and not matched_path.endswith("index.py"):
             original_path = matched_path.split("?")[0]
             request.scope["path"] = original_path
             request.scope["raw_path"] = original_path.encode("utf-8")
@@ -62,7 +63,7 @@ app.add_middleware(
 
 # Mount with /api prefix (standard)
 app.include_router(energy_router, prefix="/api")
-# Also mount without prefix (in case Vercel rewrite forwards stripped path like /day-ahead)
+# Also mount without prefix (in case rewrite forwards stripped path like /day-ahead)
 app.include_router(energy_router)
 
 # Mount static build of frontend if present (for local single-server and non-serverless deployment)

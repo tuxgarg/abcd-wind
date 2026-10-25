@@ -50,10 +50,13 @@ def test_monthly_metrics():
     assert len(data["diurnalProfile"]) == 48
 
 def test_vercel_path_rewrite():
-    """Simulates how Vercel rewrites /api/day-ahead to /api/index.py with x-matched-path header."""
-    headers = {"x-matched-path": "/api/day-ahead?date=2026-01-01&cutoff_hour=11"}
-    response = client.get("/api/index.py?date=2026-01-01&cutoff_hour=11", headers=headers)
+    """Simulates how Vercel rewrites /api/day-ahead to /api/index.py?__vercel_route__=day-ahead."""
+    response = client.get("/api/index.py?__vercel_route__=day-ahead&date=2026-01-01&cutoff_hour=11")
     assert response.status_code == 200
     data = response.json()
     assert data["deliveryDate"] == "2026-01-01"
     assert "metrics" in data
+
+    response_health = client.get("/api/index.py?__vercel_route__=health")
+    assert response_health.status_code == 200
+    assert response_health.json()["status"] == "healthy"
