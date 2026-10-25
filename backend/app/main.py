@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -33,6 +33,23 @@ app = FastAPI(
     lifespan=lifespan,
     redirect_slashes=False
 )
+
+# Vercel Serverless Path Rewrite Middleware:
+# When Vercel applies the rewrite rule `{"source": "/api/(.*)", "destination": "/api/index.py"}`,
+# Vercel rewrites the ASGI request path to `/api/index.py` and stores the original URL
+# in the `x-matched-path` or `x-forwarded-uri` header.
+# This middleware restores the true requested path so FastAPI routes it correctly.
+@app.middleware("http")
+async def vercel_path_rewrite_middleware(request: Request, call_next):
+    path = request.scope.get("path", "")
+    if path in ["/api/index.py", "/api/index", "/api", "/api/index.py/"]:
+        matched_path = request.headers.get("x-matched-path") or request.headers.get("x-forwarded-uri")
+        if matched_path:
+            # Strip query parameters from path if present
+            original_path = matched_path.split("?")[0]
+            request.scope["path"] = original_path
+            request.scope["raw_path"] = original_path.encode("utf-8")
+    return await call_next(request)
 
 # Enable CORS for local dev (Vite on :5173 / :3000) and production
 app.add_middleware(
