@@ -9,35 +9,39 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 def init_db():
-    conn = get_connection()
-    with conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS actuals (
-                startTime TEXT PRIMARY KEY,
-                settlementDate TEXT NOT NULL,
-                settlementPeriod INTEGER NOT NULL,
-                generation REAL NOT NULL,
-                publishTime TEXT
-            );
-        """)
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_actuals_date 
-            ON actuals(settlementDate);
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS forecasts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                startTime TEXT NOT NULL,
-                publishTime TEXT NOT NULL,
-                generation REAL NOT NULL,
-                UNIQUE(startTime, publishTime)
-            );
-        """)
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_forecasts_lookup 
-            ON forecasts(startTime, publishTime);
-        """)
-    conn.close()
+    try:
+        conn = get_connection()
+        with conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS actuals (
+                    startTime TEXT PRIMARY KEY,
+                    settlementDate TEXT NOT NULL,
+                    settlementPeriod INTEGER NOT NULL,
+                    generation REAL NOT NULL,
+                    publishTime TEXT
+                );
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_actuals_date 
+                ON actuals(settlementDate);
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS forecasts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    startTime TEXT NOT NULL,
+                    publishTime TEXT NOT NULL,
+                    generation REAL NOT NULL,
+                    UNIQUE(startTime, publishTime)
+                );
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_forecasts_lookup 
+                ON forecasts(startTime, publishTime);
+            """)
+        conn.close()
+    except sqlite3.OperationalError as e:
+        # On read-only environments (if tables already exist), ignore attempt to write
+        print(f"[Notice] SQLite read-only mode active: {e}")
 
 def store_actuals(records: List[Dict[str, Any]]) -> int:
     conn = get_connection()

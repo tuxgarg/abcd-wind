@@ -4,7 +4,7 @@ from backend.app.services.cache_service import get_available_dates, get_actuals_
 from backend.app.services.analytics import calculate_day_ahead_metrics, calculate_monthly_summary
 from backend.app.services.sync_data import sync_january_2026_data
 
-router = APIRouter(prefix="/api", tags=["Energy Analytics"])
+router = APIRouter(tags=["Energy Analytics"])
 
 @router.get("/health")
 def health_check():

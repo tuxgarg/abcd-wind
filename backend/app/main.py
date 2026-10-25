@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -30,7 +30,8 @@ app = FastAPI(
     title="UK Wind Day-Ahead Market Intelligence API",
     description="Elexon BMRS Wind Generation Forecast vs Actuals Analytics for UK Wholesale Electricity Procurement",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    redirect_slashes=False
 )
 
 # Enable CORS for local dev (Vite on :5173 / :3000) and production
@@ -42,15 +43,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount with /api prefix (standard)
+app.include_router(energy_router, prefix="/api")
+# Also mount without prefix (in case Vercel rewrite forwards stripped path like /day-ahead)
 app.include_router(energy_router)
 
-# Mount static build of frontend if present (for single container deployment)
+# Mount static build of frontend if present (for local single-server and non-serverless deployment)
 FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 if FRONTEND_DIST.exists():
     app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
 
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
+        # Never serve index.html for API paths
+        if full_path.startswith("api/") or full_path == "api":
+            raise HTTPException(status_code=404, detail=f"API route /{full_path} not found")
         file_path = FRONTEND_DIST / full_path
         if file_path.is_file():
             return FileResponse(file_path)
@@ -58,4 +65,4 @@ if FRONTEND_DIST.exists():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.app.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("backend.app.main:app", host="0.0.0.0", port=8080, reload=True)
